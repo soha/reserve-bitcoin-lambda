@@ -1,22 +1,33 @@
 package main
 
 import (
-	"buy-btc/bitflyer"
+	"buy-btc/gmocoin"
 	"fmt"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ssm"
 )
 
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	tickerChan := make(chan *bitflyer.Ticker)
+	//tickerChan := make(chan *bitflyer.Ticker)
+	tickerChan := make(chan *gmocoin.Ticker)
 	errChan := make(chan error)
 	defer close(tickerChan)
 	defer close(errChan)
 
+	go gmocoin.GetTicker(tickerChan, errChan)
+	ticker := <-tickerChan
+	err := <-errChan
+	if err != nil {
+		return getErrorResponse(err.Error()), err
+	}
+	return events.APIGatewayProxyResponse{
+		Body:       fmt.Sprintf("ticker:%s", ticker),
+		StatusCode: 200,
+	}, nil
+}
+
+/*
 	go bitflyer.GetTicker(tickerChan, errChan, bitflyer.Btcjpy)
 	ticker := <-tickerChan
 	err := <-errChan
@@ -24,7 +35,10 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return getErrorResponse(err.Error()), err
 	}
 
-
+	return events.APIGatewayProxyResponse{
+		Body:       fmt.Sprintf("ticker:%s", ticker),
+		StatusCode: 200,
+	}, nil
 	apiKey, err := getParameter("buy-btc-apikey")
 	if err != nil {
 		return getErrorResponse(err.Error()), err
@@ -53,7 +67,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	}, nil
 }
 
-
 //System Managerからパラメータを取得する関数
 func getParameter(key string) (string, error) {
 	// SharedConfigEnable → ~/.aws/config
@@ -64,7 +77,7 @@ func getParameter(key string) (string, error) {
 	svc := ssm.New(sess, aws.NewConfig().WithRegion("ap-northeast-1"))
 
 	params := &ssm.GetParameterInput{
-		Name: 			aws.String(key),
+		Name:           aws.String(key),
 		WithDecryption: aws.Bool(true),
 	}
 
@@ -75,10 +88,10 @@ func getParameter(key string) (string, error) {
 
 	return *res.Parameter.Value, nil
 }
-
+*/
 func getErrorResponse(message string) events.APIGatewayProxyResponse {
 	return events.APIGatewayProxyResponse{
-		Body: 		message,
+		Body:       message,
 		StatusCode: 400,
 	}
 }
