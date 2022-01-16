@@ -2,7 +2,13 @@ package gmocoin
 
 import (
 	"buy-btc/utils"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"log"
+	"strconv"
 	"time"
 )
 
@@ -97,20 +103,47 @@ func GetBuyLogic(strategy int) func(float64, *Ticker) (float64, float64) {
 
 	return logic
 }
+*/
 
-//新規注文を出すfunction
-func (client *APIClient) PlaceOrder(order *Order) (*OrderRes, error) {
-	method := "POST"
-	path := "/v1/me/sendchildorder"
-	url := baseURL + path
-	data, err := json.Marshal(order)
+//成行注文
+func MarketOrder(client *APIClient, size float64) (*OrderRes, error) {
+	order := Order{
+		Symbol:        "BTC",
+		Side:          "BUY",
+		ExecutionType: "MARKET",
+		Size:          strconv.FormatFloat(size, 'f', 4, 64), //GMOコインのETHの最小取引単位は、0.01、BTCは、0.0001
+	}
+	log.Println("order")
+	log.Println(order)
+	orderRes, err := client.PlaceOrder(&order)
 	if err != nil {
 		return nil, err
 	}
 
+	return orderRes, nil
+}
+
+//新規注文を出すfunction
+func (client *APIClient) PlaceOrder(order *Order) (*OrderRes, error) {
+	method := "POST"
+	path := "/v1/order"
+	url := baseURL + "/private" + path
+	data, err := json.Marshal(order)
+	if err != nil {
+		return nil, err
+	}
+	log.Println("data")
+	log.Println(string(data))
+
 	header := client.getHeader(method, path, data)
 
+	log.Println("url")
+	log.Println(url)
+	log.Println("header")
+	log.Println(header)
 	res, err := utils.DoHttpRequest(method, url, header, map[string]string{}, data)
+	log.Println("res")
+	log.Println(string(res))
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +154,7 @@ func (client *APIClient) PlaceOrder(order *Order) (*OrderRes, error) {
 		return nil, err
 	}
 
-	if len(orderRes.ChildOrderAcceptanceId) == 0 {
+	if orderRes.Status != 0 {
 		return nil, errors.New(string(res))
 	}
 
@@ -129,7 +162,8 @@ func (client *APIClient) PlaceOrder(order *Order) (*OrderRes, error) {
 }
 
 func (client *APIClient) getHeader(method, path string, body []byte) map[string]string {
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	//timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	timestamp := strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10)
 
 	text := timestamp + method + path + string(body)
 	mac := hmac.New(sha256.New, []byte(client.apiSecret))
@@ -137,13 +171,11 @@ func (client *APIClient) getHeader(method, path string, body []byte) map[string]
 	sign := hex.EncodeToString(mac.Sum(nil))
 
 	return map[string]string{
-		"ACCESS-KEY":       client.apiKey,
-		"ACCESS-TIMESTAMP": timestamp,
-		"ACCESS-SIGN":      sign,
-		"Content-Type":     "application/json",
+		"API-KEY":       client.apiKey,
+		"API-TIMESTAMP": timestamp,
+		"API-SIGN":      sign,
 	}
 }
-*/
 
 type Ticker struct {
 	Status       int          `json:"status"`
@@ -163,15 +195,18 @@ type TickerItem struct {
 }
 
 type Order struct {
-	ProductCode     string  `json:"product_code"`
-	ChildOrderType  string  `json:"child_order_type"`
-	Side            string  `json:"side"`
-	Price           float64 `json:"price"`
-	Size            float64 `json:"size"`
-	MinuteToExpires int     `json:"minute_to_expire"`
-	TimeInForce     string  `json:"time_in_force"`
+	Symbol        string `json:"symbol"`
+	Side          string `json:"side"`
+	ExecutionType string `json:"executionType"`
+	//TimeInForce   string `json:"timeInForce"`
+	//Price string `json:"price"`
+	//LosscutPrice  string `json:"losscutPrice"`
+	Size string `json:"size"`
+	//CancelBefore bool   `json:"cancelBefore"`
 }
 
 type OrderRes struct {
-	ChildOrderAcceptanceId string `json:"child_order_acceptance_id"`
+	Status       int       `json:"status"`
+	Data         string    `json:"data"`
+	Responsetime time.Time `json:"responsetime"`
 }

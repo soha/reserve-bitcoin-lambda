@@ -6,6 +6,9 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ssm"
 )
 
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
@@ -15,30 +18,20 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	defer close(tickerChan)
 	defer close(errChan)
 
-	go gmocoin.GetTicker(tickerChan, errChan)
-	ticker := <-tickerChan
-	err := <-errChan
-	if err != nil {
-		return getErrorResponse(err.Error()), err
+	/**
+		go gmocoin.GetTicker(tickerChan, errChan)
+		ticker := <-tickerChan
+		err := <-errChan
+		if err != nil {
+			return getErrorResponse(err.Error()), err
+		}
+		return events.APIGatewayProxyResponse{
+			Body:       fmt.Sprintf("ticker:%s", ticker),
+			StatusCode: 200,
+		}, nil
 	}
-	return events.APIGatewayProxyResponse{
-		Body:       fmt.Sprintf("ticker:%s", ticker),
-		StatusCode: 200,
-	}, nil
-}
+	**/
 
-/*
-	go bitflyer.GetTicker(tickerChan, errChan, bitflyer.Btcjpy)
-	ticker := <-tickerChan
-	err := <-errChan
-	if err != nil {
-		return getErrorResponse(err.Error()), err
-	}
-
-	return events.APIGatewayProxyResponse{
-		Body:       fmt.Sprintf("ticker:%s", ticker),
-		StatusCode: 200,
-	}, nil
 	apiKey, err := getParameter("buy-btc-apikey")
 	if err != nil {
 		return getErrorResponse(err.Error()), err
@@ -48,11 +41,9 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return getErrorResponse(err.Error()), err
 	}
 
-	client := bitflyer.NewAPIClient(apiKey, apiSecret)
+	client := gmocoin.NewAPIClient(apiKey, apiSecret)
 
-	//カリー化
-	price, size := bitflyer.GetBuyLogic(1)(10000.0, ticker)
-	orderRes, err := bitflyer.PlaceOrderWithParams(client, price, size)
+	orderRes, err := gmocoin.MarketOrder(client, 0.0001) //GMOコインのETHの最小取引数量は、0.01、0.0001なのは最小取引単位、BTCは、0.0001
 
 	if err != nil {
 		return events.APIGatewayProxyResponse{
@@ -88,7 +79,7 @@ func getParameter(key string) (string, error) {
 
 	return *res.Parameter.Value, nil
 }
-*/
+
 func getErrorResponse(message string) events.APIGatewayProxyResponse {
 	return events.APIGatewayProxyResponse{
 		Body:       message,
