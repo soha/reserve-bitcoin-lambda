@@ -1,8 +1,9 @@
 package main
 
 import (
-	"buy-btc/bitflyer"
+	"buy-btc/bitbank"
 	"fmt"
+	"log"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -12,19 +13,24 @@ import (
 )
 
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	tickerChan := make(chan *bitflyer.Ticker)
+	tickerChan := make(chan *bitbank.Ticker)
 	errChan := make(chan error)
 	defer close(tickerChan)
 	defer close(errChan)
+	/*
+		go bitbank.GetTicker(tickerChan, errChan)
+		ticker := <-tickerChan
+		err := <-errChan
+		if err != nil {
+			return getErrorResponse(err.Error()), err
+		}
 
-	go bitflyer.GetTicker(tickerChan, errChan, bitflyer.Btcjpy)
-	ticker := <-tickerChan
-	err := <-errChan
-	if err != nil {
-		return getErrorResponse(err.Error()), err
-	}
-
-
+		log.Println("ticker:", ticker)
+		return events.APIGatewayProxyResponse{
+			Body:       fmt.Sprintf("res:%+v", ticker),
+			StatusCode: 200,
+		}, nil
+	*/
 	apiKey, err := getParameter("buy-btc-apikey")
 	if err != nil {
 		return getErrorResponse(err.Error()), err
@@ -34,13 +40,12 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return getErrorResponse(err.Error()), err
 	}
 
-	client := bitflyer.NewAPIClient(apiKey, apiSecret)
+	client := bitbank.NewAPIClient(apiKey, apiSecret)
 
-	//カリー化
-	price, size := bitflyer.GetBuyLogic(1)(10000.0, ticker)
-	orderRes, err := bitflyer.PlaceOrderWithParams(client, price, size)
+	orderRes, err := bitbank.MarketOrder(client, "0.0001") //bitbankのETHの最小取引数量は、0.0001
 
 	if err != nil {
+		log.Println(err)
 		return events.APIGatewayProxyResponse{
 			Body:       "Bad Request!!",
 			StatusCode: 400,
@@ -53,7 +58,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	}, nil
 }
 
-
 //System Managerからパラメータを取得する関数
 func getParameter(key string) (string, error) {
 	// SharedConfigEnable → ~/.aws/config
@@ -64,7 +68,7 @@ func getParameter(key string) (string, error) {
 	svc := ssm.New(sess, aws.NewConfig().WithRegion("ap-northeast-1"))
 
 	params := &ssm.GetParameterInput{
-		Name: 			aws.String(key),
+		Name:           aws.String(key),
 		WithDecryption: aws.Bool(true),
 	}
 
@@ -78,7 +82,7 @@ func getParameter(key string) (string, error) {
 
 func getErrorResponse(message string) events.APIGatewayProxyResponse {
 	return events.APIGatewayProxyResponse{
-		Body: 		message,
+		Body:       message,
 		StatusCode: 400,
 	}
 }
