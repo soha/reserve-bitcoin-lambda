@@ -15,8 +15,8 @@ import (
 const baseURL = "https://public.bitbank.cc"
 const basePrivateURL = "https://api.bitbank.cc"
 const pair = "pair"
-const btcMinimumAmount = 0.001 //bitflyerにおけるBTCの最小注文数量
-const btcPlace = 4.0
+const MinimumAmount = 0.0001 //bitbankにおけるETHの最小注文数量
+const BtcPlace = 5.0
 
 type APIClient struct {
 	apiKey    string
@@ -107,12 +107,12 @@ func GetBuyLogic(strategy int) func(float64, *Ticker) (float64, float64) {
 */
 
 //成行注文
-func MarketOrder(client *APIClient, amount string) (*OrderRes, error) {
+func MarketOrder(client *APIClient, amount float64) (*OrderRes, error) {
 	order := Order{
 		Pair:   "eth_jpy",
 		Side:   "buy",
 		Type:   "market",
-		Amount: amount,
+		Amount: strconv.FormatFloat(amount, 'f', 4, 64), //bitbankのETHの最小取引数量は、0.0001 なので少数4桁まで
 	}
 	log.Println("order")
 	log.Println(order)
@@ -140,8 +140,8 @@ func (client *APIClient) PlaceOrder(order *Order) (*OrderRes, error) {
 
 	log.Println("url")
 	log.Println(url)
-	log.Println("header")
-	log.Println(header)
+	//log.Println("header")
+	//log.Println(header) // accesskey,secretkey出るので注意
 	res, err := utils.DoHttpRequest(method, url, header, map[string]string{}, data)
 	log.Println("res")
 	log.Println(string(res))
@@ -207,8 +207,8 @@ type Order struct {
 }
 
 type OrderRes struct {
-	Success      int   `json:"success"`
-	OrderResData int64 `json:"data"`
+	Success      int          `json:"success"`
+	OrderResData OrderResData `json:"data"`
 }
 
 type OrderResData struct {

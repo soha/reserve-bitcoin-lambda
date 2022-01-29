@@ -2,8 +2,10 @@ package main
 
 import (
 	"buy-btc/bitbank"
+	"buy-btc/utils"
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -17,20 +19,16 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	errChan := make(chan error)
 	defer close(tickerChan)
 	defer close(errChan)
-	/*
-		go bitbank.GetTicker(tickerChan, errChan)
-		ticker := <-tickerChan
-		err := <-errChan
-		if err != nil {
-			return getErrorResponse(err.Error()), err
-		}
 
-		log.Println("ticker:", ticker)
-		return events.APIGatewayProxyResponse{
-			Body:       fmt.Sprintf("res:%+v", ticker),
-			StatusCode: 200,
-		}, nil
-	*/
+	go bitbank.GetTicker(tickerChan, errChan)
+	ticker := <-tickerChan
+	err := <-errChan
+	if err != nil {
+		return getErrorResponse(err.Error()), err
+	}
+
+	log.Println("ticker:", ticker)
+
 	apiKey, err := getParameter("buy-btc-apikey")
 	if err != nil {
 		return getErrorResponse(err.Error()), err
@@ -39,10 +37,34 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	if err != nil {
 		return getErrorResponse(err.Error()), err
 	}
+	// 一度に購入する金額(文字列)
+	oneShotBuyBudgetStr, err := getParameter("buy-btc-oneshotbuybudget")
+	if err != nil {
+		return getErrorResponse(err.Error()), err
+	}
+	//oneShotBuyBudgetStr := "500"
+
+	oneShotBuyBudget, err := strconv.ParseFloat(oneShotBuyBudgetStr, 64)
+	if err != nil {
+		return getErrorResponse(err.Error()), err
+	}
+	log.Println("oneShotBuyPrice:", oneShotBuyBudget)
+
+	// 注文価格(自然数)
+	buyPrice, err := strconv.ParseFloat(ticker.Data.Last, 64)
+	if err != nil {
+		return getErrorResponse(err.Error()), err
+	}
+
+	buySize := utils.CalcAmount(buyPrice, oneShotBuyBudget, bitbank.MinimumAmount, bitbank.BtcPlace)
+
+	//buyAmount := oneShotBuyPrice / buyPrice
+	//buyAmountStr := strconv.FormatFloat(buyAmount, 'f', 4, 64) //bitbankのETHの最小取引数量は、0.0001 なので少数4桁まで
+	log.Println("buyAmount:", buySize)
 
 	client := bitbank.NewAPIClient(apiKey, apiSecret)
 
-	orderRes, err := bitbank.MarketOrder(client, "0.0001") //bitbankのETHの最小取引数量は、0.0001
+	orderRes, err := bitbank.MarketOrder(client, buySize) //bitbankのETHの最小取引数量は、0.0001
 
 	if err != nil {
 		log.Println(err)
