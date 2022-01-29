@@ -8,3 +8,4 @@
 .DS_Store
 .aws-sam/
 .idea/
+samconfig.toml
